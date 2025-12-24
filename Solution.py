@@ -316,7 +316,7 @@ def update_dish_price(dish_id: int, price: float) -> ReturnValue:
     conn, results_count, result, final_status = None, None, None, ReturnValue.OK
     try:
         conn = Connector.DBConnector()
-        query = sql.SQL("UPDATE Dishes SET price={price} WHERE dish_id={dish_id}").format(
+        query = sql.SQL("UPDATE Dishes SET price={price} WHERE dish_id={dish_id} AND is_active=True").format(
             price=sql.Literal(price),
             dish_id=sql.Literal(dish_id))
         results_count, result = conn.execute(query)
