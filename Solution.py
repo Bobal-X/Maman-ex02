@@ -739,18 +739,18 @@ def get_cumulative_profit_per_month(year: int) -> List[Tuple[int, float]]:
     try:
         conn = Connector.DBConnector()
         query = sql.SQL("""
-        SELECT month, SUM(OrdersWithMonth.subtotal) as total_month FROM
-            (SELECT O.order_id as order_id, OP.subtotal as subtotal,
-                    EXTRACT(MONTH FROM date) as month
-            FROM OrdersPrices as OP JOIN Orders as O
-                ON OP.order_id = O.order_id
-            WHERE EXTRACT(YEAR FROM date)={year}) as OrdersWithMonth
-        GROUP BY month
-        )
+        WITH RECURSIVE all_months AS (
+            SELECT 1 as i
+            UNION
+            SELECT i+1
+            FROM all_months
+            WHERE i < 12
+        ) SELECT i as month, COALESCE((SELECT SUM(OP.subtotal) FROM Orders as O JOIN OrdersPrices as OP ON O.order_id = OP.order_id WHERE EXTRACT(YEAR FROM O.date) = {year} AND EXTRACT(MONTH FROM O.date) <= am.i ), 0.0) as total FROM all_months as am
+        ORDER BY month DESC
         """).format(year=sql.Literal(year))
         results_count, qu_result = conn.execute(query)
         result = [
-            (row['month'], row['total_month']) for row in qu_result
+            (row['month'], row['total']) for row in qu_result
         ]
     except Exception as e:
         failed = True
