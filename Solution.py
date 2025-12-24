@@ -750,7 +750,7 @@ def get_cumulative_profit_per_month(year: int) -> List[Tuple[int, float]]:
         """).format(year=sql.Literal(year))
         results_count, qu_result = conn.execute(query)
         result = [
-            (row['month'], row['total']) for row in qu_result
+            (row['month'], float(row['total'])) for row in qu_result
         ]
     except Exception as e:
         failed = True
