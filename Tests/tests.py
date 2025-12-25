@@ -17,6 +17,7 @@ from Business.Customer import Customer, BadCustomer
 
 class Test(AbstractTest):
     def test_001_add_customer_edge_cases(self) -> None:
+        self.setUp()
         # Test adding a customer with negative ID (should fail with BAD_PARAMS due to CHECK constraint)
         c_negative_id = Customer(-1, 'Test Name', 25, "1234567890")
         self.assertEqual(ReturnValue.BAD_PARAMS, Solution.add_customer(c_negative_id), 'negative ID')
@@ -54,6 +55,7 @@ class Test(AbstractTest):
         self.assertEqual(ReturnValue.BAD_PARAMS, Solution.add_customer(c_null_phone), 'null phone')
 
     def test_002_get_customer_edge_cases(self) -> None:
+        self.setUp()
         # Setup: Add a customer to retrieve
         c_original = Customer(100, 'Get Test', 30, "1112223333")
         self.assertEqual(ReturnValue.OK, Solution.add_customer(c_original), 'add test customer')
@@ -79,6 +81,7 @@ class Test(AbstractTest):
         self.assertEqual(BadCustomer.__name__, deleted_customer.__class__.__name__, 'deleted customer')
 
     def test_003_delete_customer_edge_cases(self) -> None:
+        self.setUp()
         # Setup: Add customers to delete
         c1 = Customer(200, 'Delete Test', 40, "9998887777")
         self.assertEqual(ReturnValue.OK, Solution.add_customer(c1), 'add test customer 1')
@@ -106,6 +109,7 @@ class Test(AbstractTest):
         self.assertEqual(BadCustomer.__name__, Solution.get_customer(202).__class__.__name__, 'verify deleted')
 
     def test_004_add_order_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Order import Order, BadOrder
         
@@ -144,6 +148,7 @@ class Test(AbstractTest):
         self.assertEqual(ReturnValue.OK, Solution.add_order(order_zero_fee), 'zero delivery fee')
 
     def test_005_get_order_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Order import Order, BadOrder
         
@@ -172,6 +177,7 @@ class Test(AbstractTest):
         self.assertEqual(BadOrder.__name__, deleted_order.__class__.__name__, 'deleted order')
 
     def test_006_delete_order_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Order import Order, BadOrder
         
@@ -202,6 +208,7 @@ class Test(AbstractTest):
         self.assertEqual(BadOrder.__name__, Solution.get_order(502).__class__.__name__, 'verify deleted')
 
     def test_007_add_dish_edge_cases(self) -> None:
+        self.setUp()
         from Business.Dish import Dish, BadDish
         
         # Test adding a valid dish
@@ -242,6 +249,7 @@ class Test(AbstractTest):
         self.assertEqual(ReturnValue.OK, Solution.add_dish(dish_min_valid), 'minimum valid values')
 
     def test_008_get_dish_edge_cases(self) -> None:
+        self.setUp()
         from Business.Dish import Dish, BadDish
         
         # Setup: Add a dish to retrieve
@@ -274,6 +282,7 @@ class Test(AbstractTest):
         self.assertEqual(False, updated_dish_status.get_is_active(), 'updated active status retrieved correctly')
 
     def test_009_update_dish_price_edge_cases(self) -> None:
+        self.setUp()
         from Business.Dish import Dish, BadDish
         
         # Setup: Add dishes to update
@@ -319,6 +328,7 @@ class Test(AbstractTest):
         self.assertEqual(0.01, min_price_dish.get_price(), 'verify minimum price updated')
 
     def test_010_update_dish_active_status_edge_cases(self) -> None:
+        self.setUp()
         from Business.Dish import Dish, BadDish
         
         # Setup: Add dishes to update
@@ -360,6 +370,7 @@ class Test(AbstractTest):
         self.assertEqual(ReturnValue.NOT_EXISTS, Solution.update_dish_price(900, 65.00), 'update price when inactive')
 
     def test_011_customer_placed_order_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Customer import Customer
         from Business.Order import Order
@@ -397,6 +408,7 @@ class Test(AbstractTest):
         self.assertEqual(ReturnValue.ALREADY_EXISTS, Solution.customer_placed_order(1001, 1001), 'second time placing same order')
 
     def test_012_get_customer_that_placed_order_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Customer import Customer, BadCustomer
         from Business.Order import Order
@@ -443,6 +455,7 @@ class Test(AbstractTest):
         self.assertEqual(BadCustomer.__name__, deleted_customer.__class__.__name__, 'order with deleted customer')
 
     def test_013_order_contains_dish_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Dish import Dish
         from Business.Order import Order
@@ -486,6 +499,7 @@ class Test(AbstractTest):
         self.assertEqual(ReturnValue.NOT_EXISTS, Solution.order_contains_dish(1200, -5, 1), 'negative dish ID')
 
     def test_014_order_does_not_contain_dish_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Dish import Dish
         from Business.Order import Order
@@ -525,6 +539,7 @@ class Test(AbstractTest):
         self.assertEqual(ReturnValue.NOT_EXISTS, Solution.order_does_not_contain_dish(1300, 1301), 'remove dish from deleted order')
 
     def test_015_get_all_order_items_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Dish import Dish
         from Business.Order import Order
@@ -591,6 +606,7 @@ class Test(AbstractTest):
         self.assertEqual(0, len(deleted_order_items), 'deleted order has no items')
 
     def test_016_customer_rated_dish_edge_cases(self) -> None:
+        self.setUp()
         from Business.Customer import Customer
         from Business.Dish import Dish
         
@@ -637,6 +653,7 @@ class Test(AbstractTest):
         self.assertEqual(ReturnValue.OK, Solution.customer_rated_dish(1501, 1501, 5), 'customer rates second dish')
 
     def test_017_customer_deleted_rating_on_dish_edge_cases(self) -> None:
+        self.setUp()
         from Business.Customer import Customer
         from Business.Dish import Dish
         
@@ -682,6 +699,7 @@ class Test(AbstractTest):
         self.assertEqual(ReturnValue.NOT_EXISTS, Solution.customer_deleted_rating_on_dish(1601, 1600), 'deleted customer rating')
 
     def test_018_get_all_customer_ratings_edge_cases(self) -> None:
+        self.setUp()
         from Business.Customer import Customer
         from Business.Dish import Dish
         
@@ -745,6 +763,7 @@ class Test(AbstractTest):
         self.assertEqual(0, len(deleted_customer_ratings), 'deleted customer has no ratings')
 
     def test_019_get_order_total_price_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Dish import Dish
         from Business.Order import Order
@@ -801,6 +820,7 @@ class Test(AbstractTest):
         self.assertEqual(0, Solution.get_order_total_price(2002), 'deleted order')
 
     def test_020_get_customers_spent_max_avg_amount_money_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Customer import Customer
         from Business.Dish import Dish
@@ -907,6 +927,7 @@ class Test(AbstractTest):
         self.assertEqual(0, len(empty_result), 'no orders in system')
         
     def test_021_get_most_ordered_dish_in_period_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime, timedelta
         from Business.Dish import Dish, BadDish
         from Business.Order import Order
@@ -1012,6 +1033,7 @@ class Test(AbstractTest):
         self.assertEqual(2202, most_ordered_p1_after_delete.get_dish_id(), 'most ordered dish in period 1 after delete')
 
     def test_022_did_customer_order_top_rated_dishes_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Customer import Customer
         from Business.Dish import Dish
@@ -1139,6 +1161,7 @@ class Test(AbstractTest):
         self.assertEqual(True, Solution.did_customer_order_top_rated_dishes(2300), 'customer 1 still has all top 5')
 
     def test_023_get_customers_rated_but_not_ordered_edge_cases(self) -> None:
+        self.setUp()
         from datetime import datetime
         from Business.Customer import Customer
         from Business.Dish import Dish
@@ -1292,6 +1315,7 @@ class Test(AbstractTest):
         
     
     def test_024_get_non_worth_price_increase_edge_cases(self) -> None:
+        self.setUp()
         from Business.Dish import Dish
         from Business.Order import Order
         from datetime import datetime
@@ -1429,6 +1453,7 @@ class Test(AbstractTest):
         
     # Adding edge case tests for remaining Advanced API functions
     def test_025_get_cumulative_profit_per_month_edge_cases(self) -> None:
+        self.setUp()
         from Business.Dish import Dish
         from Business.Customer import Customer
         from Business.Order import Order
@@ -1543,6 +1568,7 @@ class Test(AbstractTest):
         self.assertEqual(no_orders_result, expected_no_orders, "Expected all 12 months with 0.0 for year with no orders")
 
     def test_026_get_potential_dish_recommendations_edge_cases(self) -> None:
+        self.setUp()
         from Business.Dish import Dish
         from Business.Customer import Customer
         from Business.Order import Order
