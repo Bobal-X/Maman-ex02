@@ -43,17 +43,17 @@ def create_tables() -> None:
                             FOREIGN KEY (cust_id) REFERENCES Customers(cust_id) ON DELETE CASCADE);
                      """)
         conn.execute("""CREATE TABLE OrderDish(
-                            order_id INTEGER CHECK (order_id > 0),
-                            dish_id INTEGER NOT NULL CHECK (dish_id > 0),
+                            order_id INTEGER,
+                            dish_id INTEGER NOT NULL,
                             current_price DECIMAL NOT NULL CHECK (current_price > 0),
-                            amount INTEGER NOT NULL CHECK (amount > 0),
+                            amount INTEGER NOT NULL CHECK (amount >= 0),
                             FOREIGN KEY (order_id) REFERENCES Orders(order_id) ON DELETE CASCADE,
                             FOREIGN KEY (dish_id) REFERENCES Dishes(dish_id) ON DELETE CASCADE,
                             PRIMARY KEY (order_id, dish_id));
                      """)
         conn.execute("""CREATE TABLE Ratings(
-                            cust_id INTEGER CHECK (cust_id > 0),
-                            dish_id INTEGER NOT NULL CHECK (dish_id > 0),
+                            cust_id INTEGER,
+                            dish_id INTEGER NOT NULL,
                             rating INTEGER NOT NULL CHECK (rating >= 1) CHECK (rating <= 5),
                             FOREIGN KEY (cust_id) REFERENCES Customers(cust_id) ON DELETE CASCADE,
                             FOREIGN KEY (dish_id) REFERENCES Dishes(dish_id) ON DELETE CASCADE,
@@ -447,7 +447,7 @@ def order_does_not_contain_dish(order_id: int, dish_id: int) -> ReturnValue:
         conn = Connector.DBConnector()
         query = sql.SQL("DELETE FROM OrderDish"
                         " WHERE order_id={order_id}"
-                        "AND dish_id={dish_id}").format(order_id=sql.Literal(order_id),dish_id=sql.Literal(dish_id))
+                        " AND dish_id={dish_id}").format(order_id=sql.Literal(order_id),dish_id=sql.Literal(dish_id))
         results_count, result = conn.execute(query)
     except Exception as e:
         final_status = ReturnValue.ERROR
@@ -549,7 +549,7 @@ def get_all_customer_ratings(cust_id: int) -> List[Tuple[int, int]]:
 
 
 def get_order_total_price(order_id: int) -> float:
-    conn, results_count, result, failed = None, None, None, False
+    conn, results_count, result, failed = None, None, [], False
     try:
         conn = Connector.DBConnector()
         query = sql.SQL("SELECT subtotal FROM OrdersPrices WHERE order_id={order_id}").format(order_id=sql.Literal(order_id))
@@ -559,26 +559,26 @@ def get_order_total_price(order_id: int) -> float:
     finally:
         # will happen any way after code try termination or exception handling
         conn.close()
-        qu_res = result[0]
         if results_count != 1 or failed:
-            return BadOrder()
+            return 0
         else:
+            qu_res = result[0]
             return float(qu_res['subtotal'])
 
 def get_customers_spent_max_avg_amount_money() -> List[int]:
-    conn, results_count, result, failed = None, None, None, False
+    conn, results_count, result, failed = None, None, [], False
     try:
         conn = Connector.DBConnector()
         query = sql.SQL(
-            "SELECT cust_id FROM"
-            " (SELECT OC.cust_id AS cust_id, AVG(COALESCE(OP.subtoal, 0) AS avg_spent " 
-            " FROM OrderCustomer OC JOIN OrdersPrices OP on OC.order_id = OP.order_id " 
-            " GROUP BY OC.cust_id"
-            " ) AS CustomerAvg"
-            " WHERE avg_spent = ("
-            " SELECT MAX(avg_spent) FROM CustomerAvg"
-            ")"
-            " ORDER BY cust_id ASC")
+            """
+            SELECT cust_id FROM
+                (SELECT OC.cust_id AS cust_id, AVG(COALESCE(OP.subtotal, 0)) AS avg_spent
+                 FROM OrderCustomer OC JOIN OrdersPrices OP on OC.order_id = OP.order_id
+                 GROUP BY OC.cust_id ) AS CustomerAvg
+                WHERE avg_spent = (SELECT MAX(avg_spent2) FROM (SELECT AVG(COALESCE(OP.subtotal, 0)) as avg_spent2 FROM OrderCustomer OC JOIN OrdersPrices OP on OC.order_id = OP.order_id
+                 GROUP BY OC.cust_id))
+                ORDER BY cust_id ASC
+            """)
         results_count, qu_result = conn.execute(query)
         result = [
             row['cust_id'] for row in qu_result
@@ -596,12 +596,12 @@ def get_most_ordered_dish_in_period(start: datetime, end: datetime) -> Dish:
     try:
         conn = Connector.DBConnector()
 
-        query = sql.SQL("SELECT D.dish_id, D.name, D.price, D.is_active"
-                        " FROM Orders as O JOIN OrderDish as OD ON O.order_id = OD.order_id"
+        query = sql.SQL("SELECT D.dish_id, D.name, D.price, D.is_active, SUM(OD.amount) as tot_amount"
+                        " FROM (SELECT * FROM Orders WHERE date >= {start} AND date <= {end}) as O"
+                        " JOIN OrderDish as OD ON O.order_id = OD.order_id"
                         " JOIN Dishes as D ON OD.dish_id=D.dish_id"
-                        " WHERE O.date >= {start} AND O.date <= {end}"
                         " GROUP BY D.dish_id"
-                        " ORDER BY COUNT(O.order_id) DESC, D.dish_id ASC LIMIT 1").format(
+                        " ORDER BY tot_amount DESC, D.dish_id ASC LIMIT 1").format(
             start=sql.Literal(start),
             end=sql.Literal(end))
         results_count, result = conn.execute(query)
@@ -620,17 +620,17 @@ def did_customer_order_top_rated_dishes(cust_id: int) -> bool:
     conn, results_count, result, failed = None, None, None, False
     try:
         conn = Connector.DBConnector()
-        query = sql.SQL("SELECT EXISTS ("
-                        " SELECT 1 FROM OrderDish OD JOIN OrdersCustomer OC ON OD.order_id=OC.order_id "
-                        " WHERE OC.cust_id = {cust_id} AND"
-                        " OD.dish_id IN ("
-                        "  SELECT D.dish_id FROM Dishes D LEFT JOIN Ratings R ON "
-                        "   D.dish_id = R.dish_id "
-                        "  GROUP BY D.dish_id"
-                        "  ORDER BY AVG(COALESCE(R.rating, 3.0)) DESC, D.dish_id ASC"
-                        "  LIMIT 5"
-                        " )"
-                        ") AS did_order").format(
+        query = sql.SQL("""SELECT EXISTS (
+                         SELECT 1 FROM OrderDish OD JOIN OrderCustomer OC ON OD.order_id=OC.order_id 
+                         WHERE OC.cust_id = {cust_id} AND
+                         OD.dish_id IN (
+                          SELECT NewRates.dish_id FROM
+                          (SELECT D.dish_id as dish_id, COALESCE(R.rating, 3.0) as new_rating FROM Dishes D LEFT JOIN Ratings R ON D.dish_id = R.dish_id) as NewRates
+                          GROUP BY NewRates.dish_id
+                          ORDER BY AVG(new_rating) DESC, NewRates.dish_id ASC
+                          LIMIT 5
+                         )
+                        ) AS did_order""").format(
             cust_id=sql.Literal(cust_id))
         results_count, result = conn.execute(query)
     except Exception as e:
