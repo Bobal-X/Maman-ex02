@@ -26,17 +26,21 @@ def create_tables() -> None:
                      """)
         conn.execute("""CREATE TABLE Orders(
                             order_id INTEGER PRIMARY KEY CHECK (order_id > 0),
-                            cust_id INTEGER,
                             date TIMESTAMP(0) NOT NULL,
                             delivery_fee DECIMAL NOT NULL CHECK (delivery_fee >= 0),
-                            delivery_address TEXT NOT NULL CHECK ( LENGTH(delivery_address) >= 5 ),
-                            FOREIGN KEY (cust_id) REFERENCES Customers(cust_id) ON DELETE SET NULL );
+                            delivery_address TEXT NOT NULL CHECK ( LENGTH(delivery_address) >= 5 ));
                      """)
         conn.execute("""CREATE TABLE Dishes(
                             dish_id INTEGER PRIMARY KEY CHECK (dish_id > 0),
                             name TEXT NOT NULL CHECK ( LENGTH(name) >= 4 ),
                             price DECIMAL NOT NULL CHECK (price > 0),
                             is_active BOOLEAN NOT NULL);
+                     """)
+        conn.execute("""CREATE TABLE OrderCustomer(
+                            order_id INTEGER PRIMARY KEY CHECK (order_id > 0),
+                            cust_id INTEGER NOT NULL CHECK (cust_id > 0),
+                            FOREIGN KEY (order_id) REFERENCES Orders(order_id) ON DELETE CASCADE,
+                            FOREIGN KEY (cust_id) REFERENCES Customers(cust_id) ON DELETE CASCADE);
                      """)
         conn.execute("""CREATE TABLE OrderDish(
                             order_id INTEGER CHECK (order_id > 0),
@@ -118,6 +122,7 @@ def drop_tables() -> None:
         conn.execute("DROP TABLE IF EXISTS Customers CASCADE")
         conn.execute("DROP TABLE IF EXISTS Orders CASCADE")
         conn.execute("DROP TABLE IF EXISTS Dishes CASCADE")
+        conn.execute("DROP TABLE IF EXISTS OrderCustomer CASCADE")
         conn.execute("DROP TABLE IF EXISTS OrderDish CASCADE")
         conn.execute("DROP TABLE IF EXISTS Ratings CASCADE")
     except DatabaseException.ConnectionInvalid as e:
@@ -212,8 +217,7 @@ def add_order(order: Order) -> ReturnValue:
                             order_id=sql.Literal(order.get_order_id()),
                             order_date=sql.Literal(format_timestamp_for_sql(order.get_datetime())),
                             delivery_fee=sql.Literal(order.get_delivery_fee()),
-                            delivery_address=sql.Literal(order.get_delivery_address()),
-                            cust_id=sql.Literal(None)))
+                            delivery_address=sql.Literal(order.get_delivery_address())))
 
         conn.execute(query)
     except DatabaseException.ConnectionInvalid as e:
@@ -362,9 +366,8 @@ def customer_placed_order(customer_id: int, order_id: int) -> ReturnValue:
     conn, results_count, result, final_status = None, None, None, ReturnValue.OK
     try:
         conn = Connector.DBConnector()
-        query = sql.SQL("UPDATE Orders"
-                        " SET cust_id={customer_id}"
-                        " WHERE order_id={order_id} AND cust_id IS NULL").format(
+        query = sql.SQL("INSERT INTO OrderCustomer (order_id, cust_id)"
+                        " VALUES ({order_id}, {customer_id})").format(
             customer_id=sql.Literal(customer_id),
             order_id=sql.Literal(order_id),
             Null=sql.Literal(None))
@@ -372,9 +375,9 @@ def customer_placed_order(customer_id: int, order_id: int) -> ReturnValue:
     except DatabaseException.ConnectionInvalid as e:
         final_status = ReturnValue.ERROR
     except DatabaseException.NOT_NULL_VIOLATION as e:
-        final_status = ReturnValue.BAD_PARAMS
+        final_status = ReturnValue.NOT_EXISTS
     except DatabaseException.CHECK_VIOLATION as e:
-        final_status = ReturnValue.BAD_PARAMS
+        final_status = ReturnValue.NOT_EXISTS
     except DatabaseException.FOREIGN_KEY_VIOLATION as e:
         final_status = ReturnValue.NOT_EXISTS
     except DatabaseException.UNIQUE_VIOLATION as e:
@@ -392,7 +395,7 @@ def get_customer_that_placed_order(order_id: int) -> Customer:
     conn, results_count, result, failed = None, None, None, False
     try:
         conn = Connector.DBConnector()
-        query = sql.SQL("SELECT C.cust_id, C.full_name, C.age, C.phone FROM Customers C, Orders O WHERE O.order_id={order_id} AND C.cust_id=O.cust_id").format(order_id=sql.Literal(order_id))
+        query = sql.SQL("SELECT C.cust_id, C.full_name, C.age, C.phone FROM Customers C INNER JOIN OrderCustomer OC ON OC.cust_id=C.cust_id WHERE OC.order_id={order_id}").format(order_id=sql.Literal(order_id))
         results_count, result = conn.execute(query)
     except Exception as e:
         failed = True
@@ -568,9 +571,9 @@ def get_customers_spent_max_avg_amount_money() -> List[int]:
         conn = Connector.DBConnector()
         query = sql.SQL(
             "SELECT cust_id FROM"
-            " (SELECT O.cust_id AS cust_id, AVG(COALESCE(OP.subtoal, 0) AS avg_spent " 
-            " FROM Orders O JOIN OrdersPrices OP on O.order_id = OP.order_id " 
-            " GROUP BY O.cust_id"
+            " (SELECT OC.cust_id AS cust_id, AVG(COALESCE(OP.subtoal, 0) AS avg_spent " 
+            " FROM OrderCustomer OC JOIN OrdersPrices OP on OC.order_id = OP.order_id " 
+            " GROUP BY OC.cust_id"
             " ) AS CustomerAvg"
             " WHERE avg_spent = ("
             " SELECT MAX(avg_spent) FROM CustomerAvg"
@@ -617,12 +620,9 @@ def did_customer_order_top_rated_dishes(cust_id: int) -> bool:
     conn, results_count, result, failed = None, None, None, False
     try:
         conn = Connector.DBConnector()
-        # mine:
-        sql.SQL("SELECT * FROM Customers as C WHERE cust_id={cust_id} AND cust_id IN (SELECT R.cust_id FROM Ratings as R WHERE R.rating=(SELECT AVG(rating) FROM Ratings GROUP BY R.rating))")
-
         query = sql.SQL("SELECT EXISTS ("
-                        " SELECT 1 FROM OrderDish OD JOIN Orders O ON OD.order_id=O.order_id "
-                        " WHERE O.cust_id = {cust_id} AND"
+                        " SELECT 1 FROM OrderDish OD JOIN OrdersCustomer OC ON OD.order_id=OC.order_id "
+                        " WHERE OC.cust_id = {cust_id} AND"
                         " OD.dish_id IN ("
                         "  SELECT D.dish_id FROM Dishes D LEFT JOIN Ratings R ON "
                         "   D.dish_id = R.dish_id "
@@ -672,9 +672,9 @@ def get_customers_rated_but_not_ordered() -> List[int]:
               )
               AND NOT EXISTS (
                 SELECT 1
-                FROM orders O
-                JOIN orderdish OD ON O.order_id = OD.order_id
-                WHERE O.cust_id = R.cust_id
+                FROM OrderCustomer OC
+                JOIN orderdish OD ON OC.order_id = OD.order_id
+                WHERE OC.cust_id = R.cust_id
                   AND OD.dish_id = R.dish_id
               )
             ORDER BY R.cust_id ASC
@@ -777,8 +777,8 @@ def get_potential_dish_recommendations(cust_id: int) -> List[int]:
         ) SELECT DISTINCT R5.dish_id as dish_id FROM similar_customers as S2
         INNER JOIN Ratings as R5 ON S2.cust_id = R5.cust_id
         WHERE S2.cust_id <> {cust_id} AND R5.dish_id NOT IN (
-            SELECT dish_id FROM OrderDish as OD LEFT JOIN Orders as O ON OD.order_id = O.order_id
-                           WHERE O.cust_id = {cust_id}
+            SELECT dish_id FROM OrderDish as OD LEFT JOIN OrderCustomer as OC ON OD.order_id = OC.order_id
+                           WHERE OC.cust_id = {cust_id}
             )
             AND R5.rating >= 4
             ORDER BY dish_id ASC
